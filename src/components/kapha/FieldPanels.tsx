@@ -163,7 +163,7 @@ export function MeshTopology({ onSelectWearer }: { onSelectWearer: (nodeId: stri
 // -------------------------------------------------------------
 // GATEWAY DEVICE LINK (OFFLINE BLE RELAY TO DASHBOARD)
 // -------------------------------------------------------------
-export function GatewayDeviceLink({ nodeId, locketUid }: { nodeId: string; locketUid: string }) {
+export function GatewayDeviceLink({ nodeId, locketUid }: { nodeId?: string; locketUid?: string }) {
   const [status, setStatus] = useState<"DISCONNECTED" | "SCANNING" | "LINKED">("DISCONNECTED");
   const [deviceInfo, setDeviceInfo] = useState<string | null>(null);
   const [rssi, setRssi] = useState<string>("-59 dBm");
@@ -235,7 +235,7 @@ export function GatewayDeviceLink({ nodeId, locketUid }: { nodeId: string; locke
         <div className="col-span-2">
           <dt className="label-micro">RELAY CLIENT</dt>
           <dd className="font-mono text-[11px] text-muted-foreground truncate">
-            {deviceInfo || `Local Bridge (${nodeId} / ${locketUid})`}
+            {deviceInfo || `Local Bridge (${nodeId || 'NODE-01'} / ${locketUid || 'RK26-EF9801'})`}
           </dd>
         </div>
       </dl>
