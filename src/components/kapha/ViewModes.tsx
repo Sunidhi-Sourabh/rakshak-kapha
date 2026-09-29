@@ -46,20 +46,158 @@ function Badge({ children, tone }: { children: React.ReactNode; tone: string }) 
   );
 }
 
-export function PatientTopBar() {
+// -------------------------------------------------------------
+// INDIVIDUAL PATIENT OFFLINE GATEWAY BAR
+// -------------------------------------------------------------
+export function PatientGatewayStatus({
+  nodeId = "RK26-EF9801",
+  relayName = "Field Phone Hub",
+}: {
+  nodeId?: string;
+  relayName?: string;
+}) {
+  const [status, setStatus] = useState<"DISCONNECTED" | "SCANNING" | "LINKED">("DISCONNECTED");
+  const [deviceLabel, setDeviceLabel] = useState<string | null>(null);
+  const [rssiVal, setRssiVal] = useState<string>("-58 dBm");
+
+  const handlePairGateway = async () => {
+    setStatus("SCANNING");
+    try {
+      const nav = navigator as unknown as {
+        bluetooth?: { requestDevice: (opts: unknown) => Promise<{ name?: string }> };
+      };
+
+      if (!nav.bluetooth) {
+        alert("Web Bluetooth Chrome ya Edge browser par supported hai.");
+        setStatus("DISCONNECTED");
+        return;
+      }
+
+      const device = await nav.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ["battery_service"],
+      });
+
+      setDeviceLabel(device.name || relayName);
+      setRssiVal("-54 dBm");
+      setStatus("LINKED");
+    } catch {
+      setStatus("DISCONNECTED");
+    }
+  };
+
+  const handleDisconnect = () => {
+    setStatus("DISCONNECTED");
+    setDeviceLabel(null);
+  };
+
   return (
-    <section className="panel-frame flex flex-wrap items-center justify-between gap-3 p-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <Badge tone="var(--vital-cyan)">PATIENT TELEMETRY</Badge>
-        <span className="readout text-sm">RK26-EF9801</span>
-        <span className="label-micro">ABHA 91-XXXX-4421</span>
+    <section className="panel-frame mt-3 p-3.5" style={{ borderColor: "color-mix(in oklab, var(--vital-cyan) 40%, var(--border))" }}>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2.5">
+        <div className="flex items-center gap-2">
+          <span
+            className="flex h-2 w-2 rounded-full"
+            style={{
+              backgroundColor: status === "LINKED" ? "var(--vital-green)" : status === "SCANNING" ? "var(--vital-amber)" : "var(--vital-red)",
+              boxShadow: status === "LINKED" ? "0 0 10px var(--vital-green)" : undefined,
+            }}
+          />
+          <h4 className="text-xs font-semibold tracking-widest uppercase">Field Gateway Device Link</h4>
+          <span
+            className="label-micro rounded px-1.5 py-0.5 border text-[0.6rem]"
+            style={{
+              color: "var(--vital-cyan)",
+              borderColor: "var(--vital-cyan)",
+              backgroundColor: "color-mix(in oklab, var(--vital-cyan) 10%, transparent)",
+            }}
+          >
+            AIR-GAPPED • 0 CLOUD
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span
+            className="label-micro rounded px-2 py-0.5 border"
+            style={{
+              color: status === "LINKED" ? "var(--vital-green)" : status === "SCANNING" ? "var(--vital-amber)" : "var(--vital-red)",
+              borderColor: status === "LINKED" ? "var(--vital-green)" : status === "SCANNING" ? "var(--vital-amber)" : "var(--vital-red)",
+            }}
+          >
+            {status === "LINKED" ? "GATEWAY LINKED" : status === "SCANNING" ? "SCANNING LOCAL BLE..." : "STANDBY / UNPAIRED"}
+          </span>
+
+          {status !== "LINKED" ? (
+            <button
+              onClick={handlePairGateway}
+              disabled={status === "SCANNING"}
+              className="label-micro rounded-sm border px-2.5 py-1 font-semibold transition-colors hover:bg-panel-raised"
+              style={{
+                borderColor: "var(--vital-cyan)",
+                color: "var(--vital-cyan)",
+                backgroundColor: "color-mix(in oklab, var(--vital-cyan) 12%, transparent)",
+              }}
+            >
+              {status === "SCANNING" ? "SCANNING..." : "⚡ PAIR GATEWAY DEVICE"}
+            </button>
+          ) : (
+            <button
+              onClick={handleDisconnect}
+              className="label-micro rounded-sm border px-2.5 py-1 font-semibold transition-colors hover:bg-panel-raised"
+              style={{
+                borderColor: "var(--vital-red)",
+                color: "var(--vital-red)",
+                backgroundColor: "color-mix(in oklab, var(--vital-red) 12%, transparent)",
+              }}
+            >
+              DISCONNECT
+            </button>
+          )}
+        </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge tone="var(--vital-green)">Verified • Patient Bound</Badge>
-        <Badge tone="var(--vital-green)">Battery 87% · ~4d 18h</Badge>
-        <Badge tone="var(--vital-cyan)">BLE Link · Ready</Badge>
+
+      <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+        <div>
+          <span className="label-micro block">TARGET WEARABLE</span>
+          <span className="font-mono text-xs" style={{ color: "var(--vital-cyan)" }}>{nodeId}</span>
+        </div>
+        <div>
+          <span className="label-micro block">RELAY TOPOLOGY</span>
+          <span className="font-mono text-xs text-foreground">Peer-to-Phone (No Cloud)</span>
+        </div>
+        <div>
+          <span className="label-micro block">INGRESS DEVICE</span>
+          <span className="font-mono text-xs text-foreground truncate">{deviceLabel || "Field Worker Phone"}</span>
+        </div>
+        <div>
+          <span className="label-micro block">BLE RSSI</span>
+          <span className="font-mono text-xs" style={{ color: status === "LINKED" ? "var(--vital-green)" : "var(--muted-foreground)" }}>
+            {status === "LINKED" ? rssiVal : "--"}
+          </span>
+        </div>
       </div>
     </section>
+  );
+}
+
+export function PatientTopBar() {
+  return (
+    <div className="space-y-0">
+      <section className="panel-frame flex flex-wrap items-center justify-between gap-3 p-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Badge tone="var(--vital-cyan)">PATIENT TELEMETRY</Badge>
+          <span className="readout text-sm">RK26-EF9801</span>
+          <span className="label-micro">ABHA 91-XXXX-4421</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone="var(--vital-green)">Verified • Patient Bound</Badge>
+          <Badge tone="var(--vital-green)">Battery 87% · ~4d 18h</Badge>
+          <Badge tone="var(--vital-cyan)">BLE Link · Ready</Badge>
+        </div>
+      </section>
+
+      {/* Permanently Mounted Gateway Link in Individual Patient Tab */}
+      <PatientGatewayStatus />
+    </div>
   );
 }
 
@@ -91,6 +229,7 @@ const TAG_TONE: Record<TriageTag, string> = {
   YELLOW: "var(--vital-amber)",
   GREEN: "var(--vital-green)",
 };
+
 export function CommandOverview({
   tick,
   liveFrame,
