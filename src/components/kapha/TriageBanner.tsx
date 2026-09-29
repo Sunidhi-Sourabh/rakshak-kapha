@@ -19,7 +19,19 @@ export function TriageBanner({ result }: { result: InferenceResult }) {
             style={{ backgroundColor: meta.token, boxShadow: `0 0 22px ${meta.token}` }}
           />
           <div>
-            <div className="label-micro">mSTaRT ON-DEVICE CLASSIFICATION</div>
+            <div className="flex items-center gap-2">
+              <span className="label-micro">mSTaRT ON-DEVICE CLASSIFICATION</span>
+              <span
+                className="label-micro rounded px-1.5 py-0.2 border text-[0.6rem]"
+                style={{
+                  color: "var(--vital-cyan)",
+                  borderColor: "var(--vital-cyan)",
+                  backgroundColor: "color-mix(in oklab, var(--vital-cyan) 10%, transparent)",
+                }}
+              >
+                LOCAL RELAY • 0-CLOUD
+              </span>
+            </div>
             <div
               className={`readout text-3xl sm:text-4xl ${flashing ? "flash-alarm" : ""}`}
               style={{ color: meta.token, textShadow: `0 0 26px ${meta.token}77` }}
@@ -30,7 +42,7 @@ export function TriageBanner({ result }: { result: InferenceResult }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 text-right">
+        <div className="grid grid-cols-4 gap-3 text-right">
           <div>
             <div className="label-micro">Votes</div>
             <div className="readout text-lg">
@@ -47,19 +59,30 @@ export function TriageBanner({ result }: { result: InferenceResult }) {
               {(result.latencyMs * 1000).toFixed(1)} µs
             </div>
           </div>
+          <div>
+            <div className="label-micro">Gateway Hop</div>
+            <div className="readout text-lg" style={{ color: "var(--vital-cyan)" }}>
+              Direct BLE
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {result.perTree.map((cls, i) => (
-          <span
-            key={i}
-            className="label-micro rounded-sm border px-1.5 py-0.5"
-            style={{ color: TRIAGE_META[cls].token, borderColor: TRIAGE_META[cls].token }}
-          >
-            tree_{i} → {TRIAGE_META[cls].code[0]}
-          </span>
-        ))}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-2.5">
+        <div className="flex flex-wrap gap-1.5">
+          {result.perTree.map((cls, i) => (
+            <span
+              key={i}
+              className="label-micro rounded-sm border px-1.5 py-0.5"
+              style={{ color: TRIAGE_META[cls].token, borderColor: TRIAGE_META[cls].token }}
+            >
+              tree_{i} → {TRIAGE_META[cls].code[0]}
+            </span>
+          ))}
+        </div>
+        <div className="label-micro text-[0.6rem] text-muted-foreground">
+          INGRESS: AIR-GAPPED HARDWARE BINDING ACTIVE
+        </div>
       </div>
     </div>
   );
