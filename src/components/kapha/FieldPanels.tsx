@@ -160,9 +160,125 @@ export function MeshTopology({ onSelectWearer }: { onSelectWearer: (nodeId: stri
   );
 }
 
+// -------------------------------------------------------------
+// GATEWAY DEVICE LINK (OFFLINE BLE RELAY TO DASHBOARD)
+// -------------------------------------------------------------
+export function GatewayDeviceLink({ nodeId, locketUid }: { nodeId: string; locketUid: string }) {
+  const [status, setStatus] = useState<"DISCONNECTED" | "SCANNING" | "LINKED">("DISCONNECTED");
+  const [deviceInfo, setDeviceInfo] = useState<string | null>(null);
+  const [rssi, setRssi] = useState<string>("-59 dBm");
+
+  const pairLocalGateway = async () => {
+    setStatus("SCANNING");
+    try {
+      const nav = navigator as unknown as { bluetooth?: { requestDevice: (opt: unknown) => Promise<{ name?: string }> } };
+      if (!nav.bluetooth) {
+        alert("Web Bluetooth Chrome ya Edge browser par hi supported hai.");
+        setStatus("DISCONNECTED");
+        return;
+      }
+
+      const device = await nav.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ["battery_service"],
+      });
+
+      setDeviceInfo(device.name || "Handheld Gateway Relay");
+      setRssi("-56 dBm");
+      setStatus("LINKED");
+    } catch {
+      setStatus("DISCONNECTED");
+    }
+  };
+
+  const disconnectGateway = () => {
+    setStatus("DISCONNECTED");
+    setDeviceInfo(null);
+  };
+
+  return (
+    <div className="mt-5 rounded-sm border border-border bg-panel p-3.5">
+      <div className="flex items-center justify-between border-b border-border/80 pb-2">
+        <div className="flex items-center gap-2">
+          <span
+            className="flex h-2 w-2 rounded-full"
+            style={{
+              backgroundColor: status === "LINKED" ? "var(--vital-green)" : status === "SCANNING" ? "var(--vital-amber)" : "var(--vital-red)",
+              boxShadow: status === "LINKED" ? "0 0 8px var(--vital-green)" : undefined,
+            }}
+          />
+          <span className="label-micro font-bold tracking-widest text-foreground">GATEWAY INGRESS RELAY</span>
+        </div>
+        <span
+          className="label-micro rounded px-1.5 py-0.5 border"
+          style={{
+            color: status === "LINKED" ? "var(--vital-green)" : status === "SCANNING" ? "var(--vital-amber)" : "var(--vital-red)",
+            borderColor: status === "LINKED" ? "var(--vital-green)" : status === "SCANNING" ? "var(--vital-amber)" : "var(--vital-red)",
+            backgroundColor: "background/50",
+          }}
+        >
+          {status === "LINKED" ? "RELAY LINKED" : status === "SCANNING" ? "SCANNING..." : "OFFLINE / STANDBY"}
+        </span>
+      </div>
+
+      <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
+        <div>
+          <dt className="label-micro">TOPOLOGY</dt>
+          <dd className="font-mono text-[11px] text-foreground">Peer-to-Gateway (0 Cloud)</dd>
+        </div>
+        <div>
+          <dt className="label-micro">RSSI SIGNAL</dt>
+          <dd className="font-mono text-[11px]" style={{ color: "var(--vital-cyan)" }}>
+            {status === "LINKED" ? rssi : "--"}
+          </dd>
+        </div>
+        <div className="col-span-2">
+          <dt className="label-micro">RELAY CLIENT</dt>
+          <dd className="font-mono text-[11px] text-muted-foreground truncate">
+            {deviceInfo || `Local Bridge (${nodeId} / ${locketUid})`}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="mt-3 flex gap-2">
+        {status !== "LINKED" ? (
+          <button
+            onClick={pairLocalGateway}
+            disabled={status === "SCANNING"}
+            className="w-full rounded-sm border px-3 py-1.5 font-mono text-xs font-semibold tracking-wider transition-colors"
+            style={{
+              borderColor: "var(--vital-cyan)",
+              color: "var(--vital-cyan)",
+              backgroundColor: "color-mix(in oklab, var(--vital-cyan) 10%, transparent)",
+            }}
+          >
+            {status === "SCANNING" ? "SCANNING BLE BEACONS..." : "⚡ PAIR LOCAL GATEWAY (BLE)"}
+          </button>
+        ) : (
+          <button
+            onClick={disconnectGateway}
+            className="w-full rounded-sm border px-3 py-1.5 font-mono text-xs font-semibold tracking-wider transition-colors"
+            style={{
+              borderColor: "var(--vital-red)",
+              color: "var(--vital-red)",
+              backgroundColor: "color-mix(in oklab, var(--vital-red) 10%, transparent)",
+            }}
+          >
+            DISCONNECT RELAY
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
+// INDIVIDUAL PATIENT HARDWARE BINDING DRAWER
+// -------------------------------------------------------------
 export function HardwareBindingPanel({ wearer, onClose }: { wearer: WearerRecord | null; onClose: () => void }) {
   if (!wearer) return null;
   const tone = wearer.tag === "RED" ? "var(--vital-red)" : wearer.tag === "YELLOW" ? "var(--vital-amber)" : "var(--vital-green)";
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-background/70 animate-fade-in" onClick={onClose}>
       <aside
@@ -194,6 +310,9 @@ export function HardwareBindingPanel({ wearer, onClose }: { wearer: WearerRecord
           <BindingRow label="Triage" value={wearer.tag} tone={tone} />
           <BindingRow label="Sector" value={wearer.sector} />
         </dl>
+
+        {/* INTEGRATED OFFLINE GATEWAY LINK COMPONENT */}
+        <GatewayDeviceLink nodeId={wearer.nodeId} locketUid={wearer.locketUid} />
 
         <div className="mt-5 border-t border-border pt-4">
           <p className="label-micro mb-3">LIVE VITALS</p>
