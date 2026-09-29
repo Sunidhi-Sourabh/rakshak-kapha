@@ -1,6 +1,7 @@
 /** Web Audio buzzer emulator for the virtual RAKSHAK-KAPHA patch. */
 let ctx: AudioContext | null = null;
-let redTimer: ReturnType<typeof setInterval> | null = null;
+let alertTimer: ReturnType<typeof setInterval> | null = null;
+let alertLabel: 0 | 1 | 2 | null = null;
 
 function ac(): AudioContext {
   if (!ctx) {
@@ -27,11 +28,13 @@ function chirp(freq: number, dur: number, gain = 0.06, type: OscillatorType = "s
   osc.stop(a.currentTime + dur + 0.02);
 }
 
+/** Soft periodic chirp for YELLOW (every 6 s). */
 export function yellowChirp() {
-  chirp(1180, 0.09);
+  chirp(1180, 0.09, 0.04, "sine");
 }
 
-export function sweepAlarm() {
+/** Modulated beep for RED (every 3 s). */
+export function playModulatedBeep() {
   const a = ac();
   const osc = a.createOscillator();
   const g = a.createGain();
@@ -47,15 +50,29 @@ export function sweepAlarm() {
   osc.stop(a.currentTime + 0.4);
 }
 
-export function startRedAlarm() {
-  if (redTimer) return;
-  sweepAlarm();
-  redTimer = setInterval(sweepAlarm, 800);
+export function stopAlertAudio() {
+  if (alertTimer) clearInterval(alertTimer);
+  alertTimer = null;
+  alertLabel = null;
 }
 
-export function stopRedAlarm() {
-  if (redTimer) clearInterval(redTimer);
-  redTimer = null;
+/**
+ * Throttled triage alert control:
+ * RED → one modulated beep every 3 s, YELLOW → soft chirp every 6 s,
+ * GREEN (or muted) → audio fully stopped.
+ */
+export function handleTriageAlert(label: 0 | 1 | 2, audioOn: boolean) {
+  if (!audioOn || label === 0) {
+    stopAlertAudio();
+    return;
+  }
+  if (alertLabel === label) return; // already running for this level
+  stopAlertAudio();
+  alertLabel = label;
+  const fire = label === 2 ? playModulatedBeep : yellowChirp;
+  const interval = label === 2 ? 3000 : 6000;
+  fire();
+  alertTimer = setInterval(fire, interval);
 }
 
 export function confirmBeep() {
