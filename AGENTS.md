@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Wearer identity and telemetry records are defined in `src/lib/wearers.ts` so roster and mesh selections always open the same data model.
