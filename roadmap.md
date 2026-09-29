@@ -8,4 +8,5 @@
 - [x] Exact port of uploaded triage_model.h + real kapha_benchmark_dataset.csv replay
 - [x] CO2 in ppm matching dataset units; ground-truth agreement readout
 - [x] Phase seek controls (baseline / acute / recovery) and µs inference timing
+- [x] Linked locket identities in roster and shared Hardware Binding panel from roster/map
 - Source deliverables kept in firmware/: rakshak_kapha.ino, triage_model.h, pipeline.py
