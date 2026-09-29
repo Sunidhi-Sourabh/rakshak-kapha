@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MetricCard } from "@/components/kapha/MetricCard";
 import { Oscilloscope } from "@/components/kapha/Oscilloscope";
 import { DigitalTwin } from "@/components/kapha/DigitalTwin";
+import { LocketIdentity, MeshTopology, BatteryTelemetry, ZeroGpsRationale, HardwareBindingPanel } from "@/components/kapha/FieldPanels";
+import { ViewToggle, PatientTopBar, LocalTopology, CommandOverview, type ViewMode } from "@/components/kapha/ViewModes";
 import { TriageBanner } from "@/components/kapha/TriageBanner";
 import { kapha_triage_infer, TRIAGE_META, type InferenceResult } from "@/lib/triage-model";
 import {
@@ -11,12 +13,8 @@ import {
   parseTelemetryLine,
   type TelemetryFrame,
 } from "@/lib/kapha-stream";
-import {
-  confirmBeep,
-  startRedAlarm,
-  stopRedAlarm,
-  yellowChirp,
-} from "@/lib/kapha-audio";
+import { confirmBeep, handleTriageAlert, stopAlertAudio } from "@/lib/kapha-audio";
+import { wearerForNode, type WearerRecord } from "@/lib/wearers";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -69,6 +67,7 @@ function statusOf(kind: string, v: number): "ok" | "warn" | "crit" {
 
 function CommandConsole() {
   const [source, setSource] = useState<Source>("replay");
+  const [view, setView] = useState<ViewMode>("command");
   const [running, setRunning] = useState(true);
   const [linked, setLinked] = useState(false);
   const [frame, setFrame] = useState<TelemetryFrame>(() => benchmarkFrame(0));
@@ -76,10 +75,13 @@ function CommandConsole() {
     kapha_triage_infer(benchmarkFrame(0)),
   );
   const [audioOn, setAudioOn] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [asha, setAsha] = useState(0);
   const [log, setLog] = useState<string[]>(["SYS · console initialised · model kapha_forest_7"]);
   const [avgLatency, setAvgLatency] = useState(0);
   const [frameCount, setFrameCount] = useState(0);
+  const [selectedWearer, setSelectedWearer] = useState<WearerRecord | null>(null);
 
   const historyRef = useRef<TelemetryFrame[]>([]);
   const clockRef = useRef(0);
@@ -121,16 +123,19 @@ function CommandConsole() {
 
   /* ---------------- buzzer emulation ---------------- */
   useEffect(() => {
-    if (!audioOn) {
-      stopRedAlarm();
-      return;
-    }
-    if (result.label === 2) startRedAlarm();
-    else stopRedAlarm();
-    if (result.label === 1) yellowChirp();
+    handleTriageAlert(result.label, audioOn);
   }, [audioOn, result.label]);
 
-  useEffect(() => stopRedAlarm, []);
+  useEffect(() => stopAlertAudio, []);
+
+  useEffect(() => {
+    if (!selectedWearer) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedWearer(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [selectedWearer]);
 
   /* ---------------- ASHA countdown ---------------- */
   useEffect(() => {
@@ -350,6 +355,49 @@ function CommandConsole() {
         </div>
       </header>
 
+      <div className="mb-4 flex justify-end">
+        <ViewToggle view={view} onChange={(v) => { setView(v); pushLog(`VIEW · switched to ${v === "patient" ? "Individual Patient" : "ASHA Command"} mode`); }} />
+      </div>
+
+      {view === "patient" ? (
+        <div key="patient" className="space-y-4 animate-fade-in">
+          <PatientTopBar />
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricCard label="Sternum SpO₂" unit="%" value={frame.spo2} decimals={1} range="95–100" status={statusOf("spo2", frame.spo2)} fill={(frame.spo2 - 80) / 20} />
+            <MetricCard label="Pulse rate" unit="bpm" value={frame.hr} range="60–100" status={statusOf("hr", frame.hr)} fill={frame.hr / 180} />
+            <MetricCard label="MQ-135 air toxicity" unit="AQI" value={Math.round(frame.co2 / 10)} range="0–50" status={statusOf("co2", frame.co2)} fill={frame.co2 / 3200} />
+            <MetricCard label="Chest microclimate" unit="°C" value={36.6 + (frame.hr - 70) / 35} decimals={1} range="36.1–37.5" status={frame.hr > 110 ? "warn" : "ok"} fill={(frame.hr - 40) / 140} />
+          </section>
+          <Oscilloscope label="CH1 · ARTERIAL PPG" sublabel={`${Math.round(frame.hr)} BPM · LIVE`} color="var(--vital-green)" sample={ppg} running={running} />
+          <div className="grid gap-4 lg:grid-cols-3">
+            <LocketIdentity />
+            <LocalTopology />
+            <DigitalTwin
+              triage={result.label}
+              hr={frame.hr}
+              audioOn={audioOn}
+              onToggleAudio={() => setAudioOn((a) => { const n = !a; if (n) confirmBeep(); pushLog(`AUDIO · buzzer ${n ? "armed" : "muted"}`); return n; })}
+              ashaActive={asha > 0}
+              ashaRemaining={asha}
+              onAsha={triggerAsha}
+              linked={source === "replay" ? running : linked}
+            />
+          </div>
+        </div>
+      ) : (
+      <div key="command" className="animate-fade-in">
+      <div className="mb-4">
+        <CommandOverview
+          tick={frameCount}
+          liveFrame={frame}
+          onSelectWearer={setSelectedWearer}
+          silenced={!audioOn}
+          onSilence={() => { setAudioOn(false); stopAlertAudio(); pushLog("CAMP · all audio alarms silenced"); }}
+          onExport={exportFhir}
+          onBroadcast={() => pushLog("CAMP · check-in broadcast sent to 24 lockets")}
+        />
+      </div>
+
       {/* Source switcher */}
       <section className="mb-4 grid gap-2 sm:grid-cols-3">
         {SOURCES.map((s) => {
@@ -452,6 +500,9 @@ function CommandConsole() {
             />
           </section>
 
+          <MeshTopology onSelectWearer={(nodeId) => setSelectedWearer(wearerForNode(nodeId, frameCount, frame))} />
+          <ZeroGpsRationale />
+
           {/* Log */}
           <section className="panel-frame p-3">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -516,6 +567,8 @@ function CommandConsole() {
             linked={source === "replay" ? running : linked}
           />
 
+          <BatteryTelemetry />
+
           <section className="panel-frame p-4">
             <h3 className="text-sm font-semibold tracking-widest">EDGE INFERENCE ENGINE</h3>
             <p className="label-micro mt-1">
@@ -525,7 +578,7 @@ function CommandConsole() {
               <Row k="Ensemble" v="7 × decision tree" />
               <Row k="Vote rule" v="majority (argmax)" />
               <Row k="Features" v="hr · spo2 · rr · hrv · co2" />
-              <Row k="Last latency" v={`${(result.latencyMs * 1000).toFixed(1)} µs`} tone="var(--vital-green)" />
+              <Row k="Last latency" v={mounted ? `${(result.latencyMs * 1000).toFixed(1)} µs` : "—"} tone="var(--vital-green)" />
               <Row k="Test accuracy" v="1.0000 held-out" />
               <Row k="Footprint" v="0 heap · 0 malloc" />
               <Row k="Interop" v="HL7 FHIR R4 / ABDM" />
@@ -537,6 +590,11 @@ function CommandConsole() {
           </section>
         </div>
       </div>
+
+      </div>
+      )}
+
+      <HardwareBindingPanel wearer={selectedWearer} onClose={() => setSelectedWearer(null)} />
 
       <footer className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
         <span className="label-micro">
